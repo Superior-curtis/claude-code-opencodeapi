@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
-"""Lightweight Anthropic → OpenAI proxy for OpenCode Zen API.
-Replaces routatic-proxy. Strips thinking blocks to avoid malformed translation."""
+"""Lightweight Anthropic → OpenAI proxy for OmniRoute AI Gateway.
+Chains Claude Code → OmniRoute (265+ providers, auto-fallback, RTK compression)."""
 
 import json, os, sys, time, uuid
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError
 
-ZEN_URL = os.environ.get("ZEN_PROXY_URL", "https://opencode.ai/zen/go/v1/chat/completions")
+ZEN_URL = os.environ.get("ZEN_PROXY_URL", "http://localhost:20128/v1/chat/completions")
 API_KEY = os.environ.get("OPENCODE_PROXY_API_KEY") or os.environ.get("ROUTATIC_PROXY_API_KEY", "")
 LISTEN_PORT = int(os.environ.get("ZEN_PROXY_PORT", "3456"))
-ZEN_MODEL = os.environ.get("ZEN_PROXY_MODEL", "deepseek-v4-pro")
 
 
 def anthropic_to_openai(body: dict) -> dict:
@@ -106,7 +105,7 @@ def anthropic_to_openai(body: dict) -> dict:
             })
 
     openai_body = {
-        "model": ZEN_MODEL,
+        "model": body.get("model", "auto/best-coding-fast"),
         "messages": messages,
         "max_tokens": body.get("max_tokens", 4096),
         "temperature": body.get("temperature", 0.7),
@@ -401,15 +400,24 @@ class ProxyHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         print(f"[zen-proxy] GET {self.path}", file=sys.stderr, flush=True)
         if self.path in ("/v1/models", "/v1/models/"):
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.end_headers()
-            models = {
-                "data": [
-                    {"id": "deepseek-v4-flash-free", "object": "model", "created": 1},
-                ]
-            }
-            self.wfile.write(json.dumps(models).encode())
+            # Proxy to OmniRoute for live model list
+            try:
+                req = Request(
+                    ZEN_URL.replace("/chat/completions", "/models"),
+                    headers={"User-Agent": "Mozilla/5.0"},
+                )
+                resp = urlopen(req, timeout=10)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(resp.read())
+            except Exception as e:
+                print(f"[zen-proxy] models fetch error: {e}", file=sys.stderr)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                models = {"data": [{"id": "auto/best-coding-fast", "object": "model", "created": 1}]}
+                self.wfile.write(json.dumps(models).encode())
         else:
             self._send_error(404, "not found")
 

@@ -1,60 +1,75 @@
-# Claude Code ↔ OpenCode API Proxy
+# Claude Code ↔ OmniRoute AI Gateway
 
-A lightweight proxy that translates Anthropic's `/v1/messages` format to OpenAI's `/v1/chat/completions` format, letting **Claude Code CLI** use **OpenCode Zen / Go** models.
+A lightweight proxy that translates Anthropic's `/v1/messages` format to OpenAI's `/v1/chat/completions` format, letting **Claude Code CLI** use **OmniRoute** (265+ AI providers, auto-fallback, RTK compression).
 
-## How it works
+## Architecture
 
 ```
-Claude Code ──ANTHROPIC──▶ zen-proxy.py ──OPENAI──▶ api.opencode.ai
-     ◀────ANTHROPIC───────────────◀──────────────────────
+Claude Code ──ANTHROPIC──▶ zen-proxy.py ──OPENAI──▶ OmniRoute ──▶ 265+ Providers
+     ◀────ANTHROPIC───────────────◀──────────────────────◀─────────────────
 ```
 
-## Setup
+## Quick Start
 
-### 1. Get an API key
+### 1. Install OmniRoute
 
-- Sign up at [opencode.ai](https://opencode.ai)
-- Go to **Settings → API Keys** and create a key
-- The same key works for both Zen and Go endpoints
+```bash
+npm install -g omniroute
+omniroute
+```
+
+Dashboard at `http://localhost:20128` — connect providers (Kiro AI, OpenCode Free, DuckDuckGo, etc.)
 
 ### 2. Run the proxy
 
 ```bash
-export OPENCODE_PROXY_API_KEY="sk-your-api-key-here"
 python3 zen-proxy.py
 ```
 
-The proxy starts on `127.0.0.1:3456` by default. Set `ZEN_PROXY_PORT` to change the port.
+The proxy starts on `127.0.0.1:3456`.
 
 ### 3. Point Claude Code at it
 
 ```bash
-ANTHROPIC_BASE_URL=http://127.0.0.1:3456 ANTHROPIC_MODEL=deepseek-v4-pro claude
+ANTHROPIC_BASE_URL=http://127.0.0.1:3456 ANTHROPIC_MODEL=oc/deepseek-v4-flash-free claude
+```
+
+Or use OmniRoute's auto-routing model for best results:
+
+```bash
+ANTHROPIC_BASE_URL=http://127.0.0.1:3456 ANTHROPIC_MODEL=auto/best-coding-fast claude
 ```
 
 ## Configuration
 
 | Env Var | Default | Description |
 |---|---|---|
-| `OPENCODE_PROXY_API_KEY` | `""` | Your OpenCode API key |
 | `ZEN_PROXY_PORT` | `3456` | Proxy listen port |
-| `ZEN_PROXY_URL` | `https://opencode.ai/zen/go/v1/chat/completions` | Upstream OpenAI endpoint |
-| `ZEN_PROXY_MODEL` | `deepseek-v4-pro` | Model name to send upstream |
+| `ZEN_PROXY_URL` | `http://localhost:20128/v1/chat/completions` | Upstream OmniRoute endpoint |
 
-### Endpoints
+### Model naming (OmniRoute format)
 
-- **Go** (default): `https://opencode.ai/zen/go/v1/chat/completions` — supports `deepseek-v4-pro` with tool results
-- **Zen**: `https://opencode.ai/zen/v1/chat/completions` — supports `deepseek-v4-flash-free` (free, but tool calls may be unreliable)
+OmniRoute uses `<provider>/<model>` or `auto/<category>` naming:
 
-### Models
+| Model ID | Description |
+|---|---|
+| `oc/deepseek-v4-flash-free` | OpenCode free DeepSeek V4 (no API key needed) |
+| `oc/qwen3.6-plus-free` | OpenCode free Qwen 3.6 |
+| `ddgw/gpt-4o-mini` | DuckDuckGo free GPT-4o Mini |
+| `tllm/CLAUDE_4_6_OPUS` | The Old LLM free Claude 4.6 Opus |
+| `auto/best-coding-fast` | Auto-route to the best fast coding model |
+| `auto/best-free` | Auto-route to the best available free model |
 
-| Model | Endpoint | Tool Calls | Notes |
-|---|---|---|---|
-| `deepseek-v4-pro` | Go | ✅ | Works with tool results |
-| `deepseek-v4-flash-free` | Zen | ⚠️ | Free, sometimes outputs tool calls as text |
-| `qwen3.7-plus` | Go | ✅ | |
-| `minimax-m3` | Go | ✅ | |
+### Auto-routing
 
-## Why not LiteLLM?
+OmniRoute smart-routes your requests across 265+ providers with automatic fallback. Use `auto/<category>` to let it pick the best model for the job.
 
-Claude Code sends Anthropic-format requests (`/v1/messages`). LiteLLM only accepts OpenAI format (`/v1/chat/completions`), so it can't replace this proxy without an additional translation layer.
+## Provider Connections
+
+Open the OmniRoute dashboard at `http://localhost:20128` and connect providers:
+- **Kiro AI** — free Claude (~50 credits/month)
+- **OpenCode Free** — no auth needed (oc/* models)
+- **DuckDuckGo** — free GPT-4o Mini, Claude 3.5 Haiku
+- **The Old LLM** — free Claude 4.6 Opus, GPT-5.4
+- **Auggie** — free Claude Sonnet 4.6, GPT-5.5
+- **MiMo Code** — free coding model
